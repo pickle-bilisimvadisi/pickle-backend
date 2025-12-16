@@ -2,45 +2,36 @@
 
 set -e
 
-LOG_DIR="/vault/logs"
-SERVER_LOG="$LOG_DIR/vault-server.log"
+ENV_FILE=".env"
+VAULT_PATH="secret/env"
 
-vault server -config=/vault/config/config.hcl >"$SERVER_LOG" 2>&1 &
-SERVER_PID=$!
+if [ ! -f "$ENV_FILE" ]; then
+  echo "❌ .env file not found: $ENV_FILE"
+  exit 1
+fi
 
-sleep 3
+declare -A env_vars
 
-for i in {1..30}; do
-  if vault status >/dev/null 2>&1; then
-    echo "✓ Vault ready!"
-    break
+while IFS='=' read -r key value; do
+  [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+  
+  value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+  
+  env_vars["$key"]="$value"
+done < "$ENV_FILE"
+
+json_data="{"
+first=true
+for key in "${!env_vars[@]}"; do
+  if [ "$first" = true ]; then
+    first=false
+  else
+    json_data+=","
   fi
-  echo "Vault waiting..."
-  sleep 1
+  json_data+="\"$key\":\"${env_vars[$key]}\""
 done
+json_data+="}"
 
-INIT_OUTPUT=$(vault operator init -format=json -key-shares=1 -key-threshold=1)
-
-UNSEAL_KEY=$(echo $INIT_OUTPUT | jq -r .unseal_keys_b64[0])
-ROOT_TOKEN=$(echo $INIT_OUTPUT | jq -r .root_token)
-
-echo "Unseal Key: $UNSEAL_KEY" > vault_keys.txt
-echo "Root Token: $ROOT_TOKEN" >> vault_keys.txt
-
-vault operator unseal $UNSEAL_KEY
-
-vault login $ROOT_TOKEN > /dev/null
-
-vault secrets enable -path=secret kv-v2 2>/dev/null
-
-vault kv put secret/backend-app/db username="test" password="test"
-
-vault policy write backend-policy - <<EOF
-path "secret/data/backend-app/db" {
-  capabilities = ["read"]
-}
-EOF
-
-BACKEND_TOKEN=$(vault token create -policy=backend-policy -format=json | jq -r .auth.client_token)
-
-wait $SERVER_PID
+echo "📍 Path: $VAULT_PATH"
+rm -rf $env
+bash ./sync-env.sh "$json_data"
