@@ -21,6 +21,7 @@ import { MailModule } from './mail/mail.module';
         redis: {
           host: configService.get('REDIS_HOST') || 'localhost',
           port: configService.get('REDIS_PORT') || 6379,
+          password: configService.get('REDIS_PASSWORD') || undefined,
         },
       }),
       inject: [ConfigService],
