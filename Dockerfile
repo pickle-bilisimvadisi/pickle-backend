@@ -2,6 +2,9 @@ FROM node:24-alpine AS builder
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
 
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL
+
 COPY package*.json ./
 RUN npm ci
 
