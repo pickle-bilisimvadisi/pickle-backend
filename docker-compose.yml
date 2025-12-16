@@ -1,27 +1,19 @@
 services:
-  db:
-    image: postgres:16
+  vault:
+    build:
+      context: ./vault
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"
+    networks:
+      - app-network
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: menthera_db
+      VAULT_ADDR: http://localhost:8200
     volumes:
-      - ./db-data:/var/lib/postgresql/data
-    ports:
-      - 5432:5432
-    networks:
-      - menthera-network
+      - ./.env:/vault/.env:ro
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - 6379:6379
-    networks:
-      - menthera-network
-    command: redis-server --appendonly yes
-    volumes:
-      - ./redis-data:/data
 
 networks:
-  menthera-network:
+  app-network:
     driver: bridge

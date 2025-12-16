@@ -4,6 +4,9 @@
 /build
 
 .env
+init1.sh
+.vault-token
+
 
 /db-data
 # Logs
