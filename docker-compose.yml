@@ -1,15 +1,18 @@
 services:
   vault:
     build:
-      context: .
+      context: ./vault
     cap_add:
       - IPC_LOCK
     ports:
-      - "8201:8200"
+      - "8200:8200"
     networks:
       - app-network
     environment:
-      VAULT_ADDR: http://localhost:8201
+      VAULT_ADDR: http://localhost:8200
+    volumes:
+      - ./.env:/vault/.env:ro
+
 
 networks:
   app-network:

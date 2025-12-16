@@ -12,13 +12,13 @@ vault server -config=/vault/config/config.hcl >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
 sleep 3
+echo "Vault waiting..."
 
 for i in {1..30}; do
   if vault status >/dev/null 2>&1; then
     echo "✓ Vault ready!"
     break
   fi
-  echo "Vault bekleniyor... ($i/30)"
   sleep 1
 done
 
@@ -36,13 +36,14 @@ vault login $ROOT_TOKEN > /dev/null
 vault secrets enable -path=secret kv-v2 2>/dev/null || true
 
 if [ -n "$JSON_PAYLOAD" ] && [ "$JSON_PAYLOAD" != "{}" ]; then
-  echo "$JSON_PAYLOAD" | vault kv put secret/backend-app/db -
+  echo "$JSON_PAYLOAD" | vault kv put secret/env -
 else
-  vault kv put secret/backend-app/db username="default" password="default"
+    echo "❌ No environment variables to sync."
+    exit 1
 fi
 
 vault policy write backend-policy - <<EOF
-path "secret/data/backend-app/db" {
+path "secret/data/env" {
   capabilities = ["read"]
 }
 EOF

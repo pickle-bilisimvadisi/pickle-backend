@@ -2,7 +2,7 @@
 
 set -e
 
-ENV_FILE=".env"
+ENV_FILE="/vault/.env"
 VAULT_PATH="secret/env"
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -34,4 +34,4 @@ json_data+="}"
 
 echo "📍 Path: $VAULT_PATH"
 rm -rf $env
-bash ./sync-env.sh "$json_data"
+bash /vault/sync-env.sh "$json_data"
