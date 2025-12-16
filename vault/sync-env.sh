@@ -35,6 +35,11 @@ vault login $ROOT_TOKEN > /dev/null
 
 vault secrets enable -path=secret kv-v2 2>/dev/null || true
 
+vault audit enable file \
+  file_path="/vault/logs/vault-audit.log" \
+  hmac_accessor=false \
+  elide_list_responses=true
+
 if [ -n "$JSON_PAYLOAD" ] && [ "$JSON_PAYLOAD" != "{}" ]; then
   echo "$JSON_PAYLOAD" | vault kv put secret/env -
 else
