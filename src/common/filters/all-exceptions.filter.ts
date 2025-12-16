@@ -13,7 +13,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         const response = ctx.getResponse();
 
         let status = HttpStatus.INTERNAL_SERVER_ERROR;
-        let message = 'Internal server error';
+        let message: string | string[] = 'Internal server error';
 
         if (exception instanceof HttpException) {
         status = exception.getStatus();
@@ -24,9 +24,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
         response.status(status).json({
         status: 'error',
-        message,
-        timestamp: new Date().toISOString(),
-        path: ctx.getRequest().url,
+        message: Array.isArray(message) ? message.join(', ') : message,
         });
     }
 }

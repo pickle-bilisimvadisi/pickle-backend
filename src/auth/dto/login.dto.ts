@@ -1,5 +1,10 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsString } from 'class-validator';
-import { Role } from '@prisma/client';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  Matches,
+  MinLength,
+} from 'class-validator';
 
 export class LoginDto {
   @IsEmail()
@@ -8,5 +13,7 @@ export class LoginDto {
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(6)
+  @Matches(/\d/, { message: 'password must contain at least one number' })
   password: string;
 }
