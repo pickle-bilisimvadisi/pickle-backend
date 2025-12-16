@@ -1,6 +1,5 @@
 FROM node:24-alpine AS builder
 WORKDIR /usr/src/app
-ENV NODE_ENV=production
 
 ARG DATABASE_URL
 ENV DATABASE_URL=$DATABASE_URL
@@ -19,10 +18,15 @@ FROM node:24-alpine AS prod
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
 
-COPY --from=builder /usr/src/app/node_modules ./node_modules
+COPY package*.json ./
+RUN npm ci --omit=dev
+
 COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 
 EXPOSE 3000
+
 CMD ["node", "dist/main.js"]
