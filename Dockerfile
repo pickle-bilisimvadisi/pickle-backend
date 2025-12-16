@@ -9,6 +9,9 @@ FROM deps AS build
 COPY tsconfig*.json nest-cli.json ./
 COPY src ./src
 COPY prisma ./prisma
+
+RUN npx prisma generate
+
 RUN npm run build
 
 FROM node:20-alpine AS prod
@@ -21,6 +24,8 @@ RUN npm ci --omit=dev
 
 COPY --from=build /usr/src/app/dist ./dist
 COPY prisma ./prisma
+
+RUN npx prisma generate
 
 EXPOSE 3000
 
