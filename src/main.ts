@@ -8,8 +8,7 @@ async function bootstrap() {
 
   app.useGlobalFilters(new AllExceptionsFilter());
   
-  const prismaService = app.get(PrismaService);
-  await prismaService.enableShutdownHooks(app);
+  app.enableShutdownHooks();
 
   await app.listen(process.env.PORT ?? 3000);
 }
