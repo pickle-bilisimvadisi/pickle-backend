@@ -14,27 +14,29 @@ datasource db {
 }
 
 model User {
-  id        String      @id @default(uuid())
-  email     String   @unique
-  password  String?
-  role      Role     @default(USER)
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String?
+  role     Role    @default(USER)
 
-  isVerified    Boolean @default(false)
-  verifyToken   String?
-  pendingEmail  String?
-  tempEmail     String?
-  otpCode       String?
-  otpExpiry     DateTime?
+  isVerified   Boolean   @default(false)
+  verifyToken  String?
+  pendingEmail String?
+  tempEmail    String?
+  otpCode      String?
+  otpExpiry    DateTime?
 
   createdAt DateTime @default(now())
 
   refreshTokens RefreshToken[]
+  files         File[]
+  downloads     Download[]
 
   @@index([role])
 }
 
 model RefreshToken {
-  id        String      @id @default(uuid())
+  id        String   @id @default(uuid())
   token     String   @unique
   user      User     @relation(fields: [userId], references: [id])
   userId    String
@@ -42,6 +44,55 @@ model RefreshToken {
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([expiresAt])
+}
+
+model File {
+  id             String            @id @default(uuid())
+  owner          User           @relation(fields: [ownerId], references: [id])
+  ownerId        String
+  fileName       String
+  fileLink       String
+  encryptionKey  String?
+  rsaEncryptedKey String?
+  iv             String
+  authTag        String
+  expiresAt      DateTime?
+  maxDownloads   Int            @default(1)
+  downloadCount  Int            @default(0)
+  createdAt      DateTime       @default(now())
+  downloads      Download[]
+  downloadTokens DownloadToken[]
+
+  @@index([ownerId])
+  @@index([expiresAt])
+  @@index([downloadCount])
+}
+
+model Download {
+  id        String      @id @default(uuid())
+  file      File     @relation(fields: [fileId], references: [id])
+  fileId    String
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([fileId])
+  @@index([userId])
+}
+
+model DownloadToken {
+  id        String   @id @default(uuid())
+  file      File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  fileId    String
+  token     String   @unique
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([fileId])
+  @@index([token])
   @@index([expiresAt])
 }
 
