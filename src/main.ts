@@ -22,6 +22,14 @@ async function bootstrap() {
   
   app.enableShutdownHooks();
 
+  app.enableCors({
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    credentials: true,
+    maxAge: 3600,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
   await app.listen(process.env.PORT ?? 8080);
 
   console.log(`Application is running on: ${await app.getUrl()}`);

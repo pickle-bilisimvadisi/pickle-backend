@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   InternalServerErrorException,
@@ -144,7 +145,7 @@ export class AuthService {
       return newUser;
     } catch (error) {
       console.error(error);
-      throw new InternalServerErrorException('An error occurred while registering the user');
+      throw new BadRequestException(error.message);
     }
   }
 
