@@ -4,6 +4,7 @@ import { Role, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+import { Response } from 'express';
 
 @Injectable()
 export class AuthService {
@@ -33,13 +34,20 @@ export class AuthService {
     return user;
   }
 
-  async login(user: Pick<User, 'id' | 'email' | 'role'>) {
+  async login(
+    user: Pick<User, 'id' | 'email' | 'role'>,
+    res?: Response,
+  ) {
     await this.prisma.refreshToken.deleteMany({ where: { userId: user.id } });
 
     const { accessToken, refreshToken } = await this.generateTokens(user);
     const refreshTokenExpiresAt = this.computeRefreshExpiryDate();
 
     await this.storeRefreshToken(user.id, refreshToken, refreshTokenExpiresAt);
+
+    if (res) {
+      this.setRefreshCookie(res, refreshToken, refreshTokenExpiresAt);
+    }
 
     return {
       accessToken,
@@ -48,7 +56,7 @@ export class AuthService {
     };
   }
 
-  async refreshTokens(refreshToken: string) {
+  async refreshTokens(refreshToken: string, res?: Response) {
     let payload: { sub: number; email: string; role: string };
 
     try {
@@ -83,11 +91,11 @@ export class AuthService {
     const tokens = await this.generateTokens(user);
     const refreshTokenExpiresAt = this.computeRefreshExpiryDate();
 
-    await this.storeRefreshToken(
-      user.id,
-      tokens.refreshToken,
-      refreshTokenExpiresAt,
-    );
+    await this.storeRefreshToken(user.id, tokens.refreshToken, refreshTokenExpiresAt);
+
+    if (res) {
+      this.setRefreshCookie(res, tokens.refreshToken, refreshTokenExpiresAt);
+    }
 
     return {
       accessToken: tokens.accessToken,
@@ -141,6 +149,21 @@ export class AuthService {
   private computeRefreshExpiryDate() {
     const ms = this.expiresInToMs(this.refreshExpiresIn);
     return new Date(Date.now() + ms);
+  }
+
+  private setRefreshCookie(
+    res: Response,
+    refreshToken: string,
+    refreshTokenExpiresAt: Date,
+  ) {
+    const isProd = process.env.NODE_ENV === 'production';
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+      path: '/',
+      expires: refreshTokenExpiresAt,
+    });
   }
 
   private expiresInToMs(expiresIn: string | number): number {
