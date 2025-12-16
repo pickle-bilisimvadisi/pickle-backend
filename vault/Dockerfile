@@ -2,14 +2,17 @@ FROM hashicorp/vault:1.21
 
 USER root
 
+RUN apk add --no-cache jq bash
+
 RUN mkdir -p /vault/config /vault/file
 
-RUN chown -R vault:vault /vault
+COPY ./init.sh /vault/init.sh
+RUN chmod +x /vault/init.sh
 
 COPY ./config.hcl /vault/config/config.hcl
 
-COPY ./init.sh /vault/init.sh
+RUN chown -R vault:vault /vault
 
 EXPOSE 8200
 
-CMD ["sh", "/vault/init.sh"]
+CMD ["/vault/init.sh"]
