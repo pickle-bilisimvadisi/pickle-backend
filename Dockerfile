@@ -1,38 +1,34 @@
-FROM node:20-alpine AS base
+FROM node:24-alpine AS builder
+
 WORKDIR /usr/src/app
 
-FROM base AS deps
 ARG DATABASE_URL
 ENV DATABASE_URL=$DATABASE_URL
+
 COPY package*.json ./
 RUN npm ci
 
-FROM deps AS build
-ARG DATABASE_URL
-ENV DATABASE_URL=$DATABASE_URL
 COPY tsconfig*.json nest-cli.json prisma.config.ts ./
 COPY src ./src
 COPY prisma ./prisma
 
+# Prisma generate ve build
 RUN npx prisma generate
-
 RUN npm run build
 
-FROM node:20-alpine AS prod
-WORKDIR /usr/src/app
-ARG DATABASE_URL
-ENV DATABASE_URL=$DATABASE_URL
+FROM node:24-alpine AS prod
 
+WORKDIR /usr/src/app
 ENV NODE_ENV=production
 
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY --from=build /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-
-RUN npx prisma generate
 
 EXPOSE 3000
 
