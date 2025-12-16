@@ -27,11 +27,9 @@ export class FileuploadService {
   ) {
     this.publicBaseUrl = this.configService.get<string>('R2_PUBLIC_BASE_URL');
     
-    // RSA key pair'i environment variable'dan oku veya generate et
     this.rsaPublicKey = this.configService.get<string>('RSA_PUBLIC_KEY') || '';
     this.rsaPrivateKey = this.configService.get<string>('RSA_PRIVATE_KEY') || '';
 
-    // Eğer key'ler yoksa, generate et (production için environment variable kullanılmalı)
     if (!this.rsaPublicKey || !this.rsaPrivateKey) {
       const keyPair = this.generateRSAKeyPair();
       this.rsaPublicKey = keyPair.publicKey;
@@ -61,7 +59,6 @@ export class FileuploadService {
       throw new BadRequestException('RSA public key bulunamadı.');
     }
 
-    // RSA public key ile AES key'i şifrele
     const encrypted = publicEncrypt(
       {
         key: this.rsaPublicKey,
@@ -81,7 +78,6 @@ export class FileuploadService {
 
     const encryptedBuffer = Buffer.from(encryptedAESKey, 'base64');
 
-    // RSA private key ile AES key'i decrypt et
     const decrypted = privateDecrypt(
       {
         key: this.rsaPrivateKey,
@@ -103,7 +99,6 @@ export class FileuploadService {
       const aesKey = randomBytes(32);
       const iv = randomBytes(12);
 
-      // AES-256-GCM ile dosyayı şifrele
       const cipher = createCipheriv('aes-256-gcm', aesKey, iv);
       const encryptedBuffer = Buffer.concat([
         cipher.update(file.buffer),
@@ -128,7 +123,6 @@ export class FileuploadService {
 
       const fileName = normalizedPath ? `${normalizedPath}/${file.originalname}` : file.originalname;
 
-      // AES key'i RSA ile şifrele (her zaman hybrid encryption kullanılıyor)
       const rsaEncryptedKey = this.encryptAESKeyWithRSA(aesKey);
 
       const record = await this.prisma.file.create({
@@ -363,7 +357,6 @@ export class FileuploadService {
     const iv = Buffer.from(file.iv, 'base64');
     const authTag = Buffer.from(file.authTag, 'base64');
 
-    // RSA ile AES key'i decrypt et (her zaman hybrid encryption kullanılıyor)
     if (!file.rsaEncryptedKey) {
       throw new BadRequestException('RSA şifreli key bulunamadı. Dosya hybrid encryption ile şifrelenmemiş.');
     }

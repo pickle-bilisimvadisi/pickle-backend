@@ -29,24 +29,18 @@ export class S3Service {
       throw new Error('R2_BUCKET_NAME must be configured');
     }
 
-    // R2 endpoint host
     this.host = this.configService.get<string>('R2_ENDPOINT')?.replace(/^https?:\/\//, '').replace(/\/$/, '')
       || `${this.accountId}.r2.cloudflarestorage.com`;
   }
 
-  /**
-   * Upload a buffer to R2 using native HTTP requests
-   */
   async uploadBuffer(
     key: string,
     buffer: Buffer,
     contentType: string = 'application/octet-stream',
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Path with bucket name (path-style)
       const path = `/${this.bucketName}/${key}`;
 
-      // Prepare request options
       const options: any = {
         host: this.host,
         path: path,
@@ -60,13 +54,11 @@ export class S3Service {
         region: 'auto',
       };
 
-      // Sign the request with AWS Signature V4
       aws4.sign(options, {
         accessKeyId: this.accessKeyId,
         secretAccessKey: this.secretAccessKey,
       });
 
-      // Make the HTTPS request
       const req = https.request(options, (res) => {
         let responseData = '';
 
@@ -96,21 +88,15 @@ export class S3Service {
         reject(new Error(`Failed to upload file to R2: ${error.message}`));
       });
 
-      // Write buffer to request
       req.write(buffer);
       req.end();
     });
   }
 
-  /**
-   * Download a buffer from R2 using native HTTP requests
-   */
   async downloadBuffer(key: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      // Path with bucket name (path-style)
       const path = `/${this.bucketName}/${key}`;
 
-      // Prepare request options
       const options: any = {
         host: this.host,
         path: path,
@@ -120,13 +106,11 @@ export class S3Service {
         region: 'auto',
       };
 
-      // Sign the request with AWS Signature V4
       aws4.sign(options, {
         accessKeyId: this.accessKeyId,
         secretAccessKey: this.secretAccessKey,
       });
 
-      // Make the HTTPS request
       const req = https.request(options, (res) => {
         const chunks: Buffer[] = [];
 
@@ -160,15 +144,10 @@ export class S3Service {
     });
   }
 
-  /**
-   * Delete a file from R2 using native HTTP requests
-   */
   async deleteFile(key: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Path with bucket name (path-style)
       const path = `/${this.bucketName}/${key}`;
 
-      // Prepare request options
       const options: any = {
         host: this.host,
         path: path,
@@ -178,13 +157,11 @@ export class S3Service {
         region: 'auto',
       };
 
-      // Sign the request with AWS Signature V4
       aws4.sign(options, {
         accessKeyId: this.accessKeyId,
         secretAccessKey: this.secretAccessKey,
       });
 
-      // Make the HTTPS request
       const req = https.request(options, (res) => {
         let responseData = '';
 
@@ -218,9 +195,6 @@ export class S3Service {
     });
   }
 
-  /**
-   * Get the bucket name
-   */
   getBucketName(): string {
     return this.bucketName;
   }

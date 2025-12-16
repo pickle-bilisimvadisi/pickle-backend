@@ -67,7 +67,6 @@ export class FileuploadController {
       throw new BadRequestException('Dosya bulunamadı.');
     }
 
-    // Parse paths from request body (frontend should send 'paths' as JSON string in form-data)
     let pathsData: string[] = [];
     try {
       const pathsString = (req.body as any)?.paths;
@@ -78,8 +77,6 @@ export class FileuploadController {
       console.warn('Could not parse paths data:', error);
     }
 
-    // Match files with their paths
-    // Frontend should send files in same order as paths array
     const filesWithPaths = files.map((file, index) => {
       const relativePath = pathsData[index] || file.originalname;
       return {
