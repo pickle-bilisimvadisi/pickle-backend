@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -29,11 +30,11 @@ export class AuthService {
   async validateUser(email: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid email or password');
     }
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid email or password');
     }
     return user;
   }
@@ -42,7 +43,8 @@ export class AuthService {
     user: Pick<User, 'id' | 'email' | 'role'>,
     res?: Response,
   ) {
-    await this.prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+    try {
+      await this.prisma.refreshToken.deleteMany({ where: { userId: user.id } });
 
     const { accessToken, refreshToken } = await this.generateTokens(user);
     const refreshTokenExpiresAt = this.computeRefreshExpiryDate();
@@ -57,7 +59,12 @@ export class AuthService {
       accessToken,
       refreshToken,
       refreshTokenExpiresAt: refreshTokenExpiresAt.toISOString(),
-    };
+    };  
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('An error occurred while logging in');
+    }
+
   }
 
   async refreshTokens(refreshToken: string, res?: Response) {
@@ -109,31 +116,36 @@ export class AuthService {
   }
 
   async register(body: RegisterDto) {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: body.email },
-      select: { id: true },
-    });
-    if (existing) {
-      throw new ConflictException('Email is already registered');
+    try {
+      const existing = await this.prisma.user.findUnique({
+        where: { email: body.email },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new ConflictException('Email is already registered');
+      }
+  
+      const hashedPassword = await bcrypt.hash(body.password, 10);
+  
+      const newUser = await this.prisma.user.create({
+        data: {
+          email: body.email,
+          password: hashedPassword,
+          role: body.role ?? Role.USER,
+        },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          createdAt: true,
+        },
+      });
+
+      return newUser;
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('An error occurred while registering the user');
     }
-
-    const hashedPassword = await bcrypt.hash(body.password, 10);
-
-    const newUser = await this.prisma.user.create({
-      data: {
-        email: body.email,
-        password: hashedPassword,
-        role: body.role ?? Role.USER,
-      },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
-    });
-
-    return newUser;
   }
 
   private async generateTokens(user: Pick<User, 'id' | 'email' | 'role'>) {
