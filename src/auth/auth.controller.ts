@@ -6,6 +6,7 @@ import {
   Post,
   Req,
   Res,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -23,13 +24,18 @@ export class AuthController {
     @Body() body: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const user = await this.authService.validateUser(body.email, body.password);
-    const result = await this.authService.login(user, res);
+    try {
+      const user = await this.authService.validateUser(body.email, body.password);
+      const result = await this.authService.login(user, res);
 
-    return {
-      accessToken: result.accessToken,
-      refreshTokenExpiresAt: result.refreshTokenExpiresAt
-    };
+      return {
+        accessToken: result.accessToken,
+        refreshTokenExpiresAt: result.refreshTokenExpiresAt
+      };
+    } catch (error) {
+      console.error(error);
+      throw new UnauthorizedException(error.message);
+    }
   }
 
   @Post('refresh')
