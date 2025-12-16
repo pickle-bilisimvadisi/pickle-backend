@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: menthera_db
+    volumes:
+      - ./db-data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    networks:
+      - menthera-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - 6379:6379
+    networks:
+      - menthera-network
+    command: redis-server --appendonly yes
+    volumes:
+      - ./redis-data:/data
+
+networks:
+  menthera-network:
+    driver: bridge
