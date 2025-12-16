@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm ci
 
 FROM deps AS build
-COPY tsconfig*.json nest-cli.json ./
+COPY tsconfig*.json nest-cli.json prisma.config.ts ./
 COPY src ./src
 COPY prisma ./prisma
 
@@ -24,6 +24,7 @@ RUN npm ci --omit=dev
 
 COPY --from=build /usr/src/app/dist ./dist
 COPY prisma ./prisma
+COPY prisma.config.ts ./
 
 RUN npx prisma generate
 
