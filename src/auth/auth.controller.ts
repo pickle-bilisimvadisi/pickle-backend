@@ -23,8 +23,25 @@ export class AuthController {
 
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
-  async verifyEmail(@Body() body: { email: string; otp: string }) {
-    return this.authService.verifyEmail(body.email, body.otp);
+  async verifyEmail(
+    @Body() body: { email: string; otp: string },
+    @Res({ passthrough: true }) res: Response
+  ) {
+    const result = await this.authService.verifyEmail(body.email, body.otp);
+    
+    if (result.refresh_token) {
+      res.cookie('refresh_token', result.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      
+      const { refresh_token, ...responseData } = result;
+      return responseData;
+    }
+    
+    return result;
   }
 
   @Post('forgot-password')
