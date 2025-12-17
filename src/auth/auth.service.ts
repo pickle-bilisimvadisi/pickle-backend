@@ -245,7 +245,7 @@ export class AuthService {
         };
     } catch (error) {
         if (error instanceof BadRequestException) {
-            throw error;
+            throw new BadRequestException(error.message);
         }
         throw new InternalServerErrorException('Failed to create user');
     }
@@ -724,4 +724,26 @@ export class AuthService {
       role: updatedUser.role,
     };
   }
+
+  async logout(refreshToken: string) {
+    const deletedCount = await this.prismaService.refreshToken.deleteMany({
+      where: { 
+        token: refreshToken,
+        expiresAt: {
+          gt: new Date()
+        },
+        userId: {
+          not: null
+        }
+      }
+    });
+    if (deletedCount.count > 0) {
+      return {
+        message: 'Logged out successfully',
+      };
+    } else {
+      throw new BadRequestException('Invalid refresh token');
+    }
+  }
+
 }
