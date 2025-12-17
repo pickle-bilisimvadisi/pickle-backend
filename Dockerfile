@@ -18,6 +18,7 @@ FROM node:24-alpine AS prod
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
 
+# Install required tools for entrypoint script
 RUN apk add --no-cache wget jq netcat-openbsd
 
 COPY package*.json ./

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request, Get, UnauthorizedException, HttpCode, HttpStatus, Patch, Req, Query, Res } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, UnauthorizedException, HttpCode, HttpStatus, Patch, Req, Query, Res, BadRequestException } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt.guard';
@@ -21,7 +21,11 @@ export class AuthController {
         const user = await this.authService.validateUser(body.email, body.password);
         return this.authService.login(user);
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw new BadRequestException(error.message);
+      } else {
         throw new UnauthorizedException(error.message);
+      }
     }
   }
 
@@ -59,5 +63,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async refreshAccessToken(@Body() body: { refresh_token: string }) {
     return this.authService.refreshAccessToken(body.refresh_token);
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(@Body() body: { refresh_token: string }) {
+    return this.authService.logout(body.refresh_token);
   }
 }
