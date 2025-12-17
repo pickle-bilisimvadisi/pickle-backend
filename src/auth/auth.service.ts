@@ -554,6 +554,22 @@ export class AuthService {
   }
 
 
+  async resetPassword(email: string, newPassword: string) {
+    const user = await this.userService.findByEmail(email);
+    if (!user) {
+      throw new BadRequestException('User not found with this email');
+    }
+    
+    this.validatePassword(newPassword);
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.userService.updateUser(user.id, { 
+      password: hashedPassword,
+    });
+    return {
+      message: 'Password reset successfully',
+    }
+  }
   private async cleanupExpiredUnverifiedUsers(email: string) {
     try {
       const currentTime = new Date();

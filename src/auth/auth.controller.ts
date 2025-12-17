@@ -39,6 +39,18 @@ export class AuthController {
     return this.authService.resendForgotPasswordOtp(body.email);
   }
 
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  async verifyOtp(@Body() body: { email: string; otp: string }) {
+    return this.authService.verifyOtp(body.email, body.otp);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() body: { email: string; new_password: string }) {
+    return this.authService.resetPassword(body.email, body.new_password);
+  }
+
   @Post('resend-verify-email-otp')
   @HttpCode(HttpStatus.OK)
   async resendVerificationOtp(@Body() body: { email: string }) {
