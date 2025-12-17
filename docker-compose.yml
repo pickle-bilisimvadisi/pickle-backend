@@ -12,8 +12,52 @@ services:
       VAULT_ADDR: http://localhost:8200
     volumes:
       - ./.env:/vault/.env:ro
+      - vault_tokens:/vault/tokens
+
+  redis:
+    build: 
+      context: ./redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    depends_on:
+      - vault
+
+  database:
+    build:
+      context: ./postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    environment:
+      VAULT_ADDR: http://vault:8200
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - vault_tokens:/vault/tokens:ro
+    depends_on:
+      - vault
+    
+  backend:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    depends_on:
+      - vault
+      - redis
+    environment:
+      VAULT_ADDR: http://vault:8200
+      REDIS_HOST: redis
 
 
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  postgres_data:
+  vault_tokens:

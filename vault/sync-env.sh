@@ -59,4 +59,9 @@ echo "========================================="
 echo "Backend Token: $BACKEND_TOKEN"
 echo "========================================="
 
+# Backend token'ı dosyaya yaz
+mkdir -p /vault/tokens
+echo "$BACKEND_TOKEN" > /vault/tokens/backend_token.txt
+echo "✓ Backend token saved to /vault/tokens/backend_token.txt"
+
 wait $SERVER_PID
