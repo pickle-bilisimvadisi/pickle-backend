@@ -16,9 +16,26 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() body: { email: string; password: string }) {
+  async login(
+    @Body() body: { email: string; password: string },
+    @Res({ passthrough: true }) res: Response
+  ) {
       const user = await this.authService.validateUser(body.email, body.password);
-      return this.authService.login(user);
+      const result = await this.authService.login(user);
+      
+      if (result.refresh_token) {
+        res.cookie('refresh_token', result.refresh_token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+        
+        const { refresh_token, ...responseData } = result;
+        return responseData;
+      }
+      
+      return result;
   }
 
   @Post('verify-email')
