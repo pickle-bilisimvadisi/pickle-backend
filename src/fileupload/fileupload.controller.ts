@@ -144,6 +144,10 @@ export class FileuploadController {
       );
       res.setHeader('Content-Length', fileData.buffer.length.toString());
 
+      if (fileData.isZip) {
+        res.setHeader('X-File-Type', 'zip-collection');
+      }
+
       res.send(fileData.buffer);
     } catch (error) {
       res.status(error.status || 500).json({

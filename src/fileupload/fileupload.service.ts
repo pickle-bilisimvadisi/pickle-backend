@@ -13,6 +13,7 @@ import {
   constants,
 } from 'crypto';
 import { File } from 'multer';
+import * as archiver from 'archiver';
 
 @Injectable()
 export class FileuploadService {
@@ -184,6 +185,32 @@ export class FileuploadService {
       }
     });
 
+    // Folder upload için tek download token oluştur
+    let downloadToken = null;
+    if (results.length > 0) {
+      const token = randomUUID();
+      const expirationDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      // Token'ı ilk dosya ile ilişkilendir (folder için parent olarak)
+      const tokenRecord = await this.prisma.downloadToken.create({
+        data: {
+          fileId: results[0].id,
+          token,
+          expiresAt: expirationDate,
+        },
+      });
+
+      // Token'a metadata olarak tüm dosya ID'lerini ekle (description alanı varsa)
+      // Şimdilik token ile tüm dosyaları ilişkilendirmek için basit bir yöntem kullanacağız
+      const fileIds = results.map(r => r.id);
+      
+      downloadToken = {
+        token: tokenRecord.token,
+        expiresAt: tokenRecord.expiresAt,
+        fileIds: fileIds,
+      };
+    }
+
     return {
       success: errors.length === 0,
       uploaded: results,
@@ -191,6 +218,7 @@ export class FileuploadService {
       total: filesWithPaths.length,
       successful: results.length,
       failedCount: errors.length,
+      downloadToken: downloadToken,
     };
   }
 
@@ -271,7 +299,7 @@ export class FileuploadService {
     }));
   }
 
-  async generateDownloadToken(fileId: string, userId: string) {
+  async generateDownloadToken(fileId: string, userId: string, expiresAt?: number) {
     const file = await this.prisma.file.findFirst({
       where: {
         id: fileId,
@@ -285,14 +313,15 @@ export class FileuploadService {
 
     const token = randomUUID();
 
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24);
+    const expirationDate = expiresAt
+      ? new Date(Date.now() + expiresAt * 1000)
+      : new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const downloadToken = await this.prisma.downloadToken.create({
       data: {
         fileId: file.id,
         token,
-        expiresAt,
+        expiresAt: expirationDate,
       },
     });
 
@@ -327,60 +356,163 @@ export class FileuploadService {
       throw new ForbiddenException('Bu indirme linkinin süresi dolmuş.');
     }
 
+    // Token'ı kullanılmış olarak işaretle
     await this.prisma.downloadToken.update({
       where: { id: downloadToken.id },
       data: { used: true },
     });
 
-    await this.prisma.file.update({
-      where: { id: downloadToken.fileId },
-      data: {
-        downloadCount: {
-          increment: 1,
+    // Aynı zamanda oluşturulan (yaklaşık aynı zamanda) diğer dosyaları bul (folder upload)
+    const relatedFiles = await this.prisma.file.findMany({
+      where: {
+        ownerId: downloadToken.file.ownerId,
+        createdAt: {
+          gte: new Date(downloadToken.file.createdAt.getTime() - 5000), // 5 saniye önce
+          lte: new Date(downloadToken.file.createdAt.getTime() + 5000), // 5 saniye sonra
         },
       },
-    });
-
-    await this.prisma.download.create({
-      data: {
-        fileId: downloadToken.fileId,
-        userId: userId || null,
-        ipAddress: ipAddress || null,
+      orderBy: {
+        fileName: 'asc',
       },
     });
 
-    const file = downloadToken.file;
-    const objectKey = file.fileLink.replace(this.publicBaseUrl + '/', '').replace(/^\/+/, '');
+    // Eğer tek dosya ise normal download
+    if (relatedFiles.length === 1) {
+      await this.prisma.file.update({
+        where: { id: downloadToken.fileId },
+        data: {
+          downloadCount: {
+            increment: 1,
+          },
+        },
+      });
 
-    const encryptedBuffer = await this.s3Service.downloadBuffer(objectKey);
+      await this.prisma.download.create({
+        data: {
+          fileId: downloadToken.fileId,
+          userId: userId || null,
+          ipAddress: ipAddress || null,
+        },
+      });
 
-    const iv = Buffer.from(file.iv, 'base64');
-    const authTag = Buffer.from(file.authTag, 'base64');
+      const file = downloadToken.file;
+      const objectKey = file.fileLink.replace(this.publicBaseUrl + '/', '').replace(/^\/+/, '');
 
-    if (!file.rsaEncryptedKey) {
-      throw new BadRequestException('RSA şifreli key bulunamadı. Dosya hybrid encryption ile şifrelenmemiş.');
+      const encryptedBuffer = await this.s3Service.downloadBuffer(objectKey);
+
+      const iv = Buffer.from(file.iv, 'base64');
+      const authTag = Buffer.from(file.authTag, 'base64');
+
+      if (!file.rsaEncryptedKey) {
+        throw new BadRequestException('RSA şifreli key bulunamadı. Dosya hybrid encryption ile şifrelenmemiş.');
+      }
+
+      let aesKey: Buffer;
+      try {
+        aesKey = this.decryptAESKeyWithRSA(file.rsaEncryptedKey);
+      } catch (error) {
+        console.error('RSA decryption error:', error);
+        throw new BadRequestException('AES key decrypt edilemedi.');
+      }
+
+      const decipher = createDecipheriv('aes-256-gcm', aesKey, iv);
+      decipher.setAuthTag(authTag);
+
+      const decryptedBuffer = Buffer.concat([
+        decipher.update(encryptedBuffer),
+        decipher.final(),
+      ]);
+
+      return {
+        buffer: decryptedBuffer,
+        fileName: file.fileName,
+        contentType: 'application/octet-stream',
+        isZip: false,
+      };
     }
 
-    let aesKey: Buffer;
-    try {
-      aesKey = this.decryptAESKeyWithRSA(file.rsaEncryptedKey);
-    } catch (error) {
-      console.error('RSA decryption error:', error);
-      throw new BadRequestException('AES key decrypt edilemedi.');
-    }
+    // Çoklu dosya - ZIP olarak paketle
+    // Tüm dosyaları indir ve decrypt et
+    const decryptedFiles = await Promise.all(
+      relatedFiles.map(async (file) => {
+        const objectKey = file.fileLink.replace(this.publicBaseUrl + '/', '').replace(/^\/+/, '');
+        const encryptedBuffer = await this.s3Service.downloadBuffer(objectKey);
 
-    const decipher = createDecipheriv('aes-256-gcm', aesKey, iv);
-    decipher.setAuthTag(authTag);
+        const iv = Buffer.from(file.iv, 'base64');
+        const authTag = Buffer.from(file.authTag, 'base64');
 
-    const decryptedBuffer = Buffer.concat([
-      decipher.update(encryptedBuffer),
-      decipher.final(),
-    ]);
+        if (!file.rsaEncryptedKey) {
+          throw new BadRequestException(`Dosya ${file.fileName} için RSA şifreli key bulunamadı.`);
+        }
+
+        const aesKey = this.decryptAESKeyWithRSA(file.rsaEncryptedKey);
+        const decipher = createDecipheriv('aes-256-gcm', aesKey, iv);
+        decipher.setAuthTag(authTag);
+
+        const decryptedBuffer = Buffer.concat([
+          decipher.update(encryptedBuffer),
+          decipher.final(),
+        ]);
+
+        // Download kaydı oluştur
+        await this.prisma.download.create({
+          data: {
+            fileId: file.id,
+            userId: userId || null,
+            ipAddress: ipAddress || null,
+          },
+        });
+
+        // Download count artır
+        await this.prisma.file.update({
+          where: { id: file.id },
+          data: {
+            downloadCount: {
+              increment: 1,
+            },
+          },
+        });
+
+        return {
+          buffer: decryptedBuffer,
+          fileName: file.fileName,
+        };
+      }),
+    );
+
+    // ZIP oluştur
+    const archive = archiver('zip', {
+      zlib: { level: 9 },
+    });
+
+    const chunks: Buffer[] = [];
+    
+    await new Promise<void>((resolve, reject) => {
+      archive.on('data', (chunk) => chunks.push(chunk));
+      archive.on('end', () => resolve());
+      archive.on('error', (err) => reject(err));
+
+      // Dosyaları ZIP'e ekle
+      decryptedFiles.forEach(({ buffer, fileName }) => {
+        archive.append(buffer, { name: fileName });
+      });
+
+      archive.finalize();
+    });
+
+    const zipBuffer = Buffer.concat(chunks);
+
+    // Folder adını ilk dosyanın parent klasöründen al
+    const firstFileName = relatedFiles[0].fileName;
+    const folderName = firstFileName.includes('/') 
+      ? firstFileName.split('/')[0] 
+      : 'files';
 
     return {
-      buffer: decryptedBuffer,
-      fileName: file.fileName,
-      contentType: 'application/octet-stream',
+      buffer: zipBuffer,
+      fileName: `${folderName}.zip`,
+      contentType: 'application/zip',
+      isZip: true,
     };
   }
 }
