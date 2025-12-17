@@ -38,6 +38,12 @@ services:
       - vault_tokens:/vault/tokens:ro
     depends_on:
       - vault
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -f /tmp/pg_user ] && [ -f /tmp/pg_db ]; then pg_isready -U $(cat /tmp/pg_user) -d $(cat /tmp/pg_db) -h localhost || exit 1; else exit 1; fi"]      
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 40s
     
   backend:
     build:
@@ -47,11 +53,18 @@ services:
     networks:
       - app-network
     depends_on:
-      - vault
-      - redis
+      vault:
+        condition: service_started
+      redis:
+        condition: service_started
+      database:
+        condition: service_healthy
     environment:
       VAULT_ADDR: http://vault:8200
       REDIS_HOST: redis
+    volumes:
+      - vault_tokens:/vault/tokens:ro
+    restart: on-failure
 
 
 networks:
