@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+# Keep binaries as-is
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.pdf -text
+*.ico -text
+*.zip -text
+*.gz -text
+*.tar -text
+*.rar -text
+
+# Windows-specific scripts may still need CRLF; comment out if not needed
+#*.bat eol=crlf
+#*.cmd eol=crlf

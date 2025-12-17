@@ -12,8 +12,65 @@ services:
       VAULT_ADDR: http://localhost:8200
     volumes:
       - ./.env:/vault/.env:ro
+      - vault_tokens:/vault/tokens
+
+  redis:
+    build: 
+      context: ./redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    depends_on:
+      - vault
+
+  database:
+    build:
+      context: ./postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    environment:
+      VAULT_ADDR: http://vault:8200
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - vault_tokens:/vault/tokens:ro
+    depends_on:
+      - vault
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -f /tmp/pg_user ] && [ -f /tmp/pg_db ]; then pg_isready -U $(cat /tmp/pg_user) -d $(cat /tmp/pg_db) -h localhost || exit 1; else exit 1; fi"]      
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 40s
+    
+  backend:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    depends_on:
+      vault:
+        condition: service_started
+      redis:
+        condition: service_started
+      database:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: http://vault:8200
+      REDIS_HOST: redis
+    volumes:
+      - vault_tokens:/vault/tokens:ro
+    restart: on-failure
 
 
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  postgres_data:
+  vault_tokens:
