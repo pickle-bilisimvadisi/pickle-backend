@@ -3,7 +3,6 @@ import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt.guard';
 import { AuthDto } from './dto/auth.dto';
-import { CreateGuestDto, UpdateGuestDto, ConvertGuestDto } from './dto/guest-auth.dto';
 
 @Controller('auth')
 export class AuthController {
