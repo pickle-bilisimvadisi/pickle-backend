@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: pickle-backend:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: VAULT_ADDR
+              value: http://vault:8200
+            - name: REDIS_HOST
+              value: redis
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: vault-tokens
+              mountPath: /vault/tokens
+      volumes:
+        - name: vault-tokens
+          persistentVolumeClaim:
+            claimName: vault-tokens
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+  type: NodePort
