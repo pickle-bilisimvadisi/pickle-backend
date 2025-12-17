@@ -1,56 +1,143 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
 
 export type MailJobType = 'verification-otp' | 'forgot-password-otp' | 'change-email-otp';
 
-export interface MailJobData {
-  type: MailJobType;
-  email: string;
-  otp: string;
-}
-
 @Injectable()
 export class MailService {
-  constructor(
-    @InjectQueue('mail') private readonly mailQueue: Queue<MailJobData>,
-  ) {}
+  private readonly logger = new Logger(MailService.name);
+  private transporter: nodemailer.Transporter;
 
-  async enqueueVerificationOtp(email: string, otp: string) {
-    await this.enqueueMailJob('verification-otp', email, otp);
+  constructor(private readonly configService: ConfigService) {
+    this.initializeTransporter();
   }
 
-  async enqueueForgotPasswordOtp(email: string, otp: string) {
-    await this.enqueueMailJob('forgot-password-otp', email, otp);
-  }
-
-  async enqueueChangeEmailOtp(email: string, otp: string) {
-    await this.enqueueMailJob('change-email-otp', email, otp);
-  }
-
-  private async enqueueMailJob(type: MailJobType, email: string, otp: string) {
+  private initializeTransporter() {
     try {
-      await this.mailQueue.add(
-        'send-mail',
-        {
-          type,
-          email,
-          otp
+      const emailHost = this.configService.get<string>('EMAIL_HOST');
+      const emailPort = this.configService.get<string>('EMAIL_PORT');
+      const emailUser = this.configService.get<string>('EMAIL_USER');
+      const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
+
+      if (!emailHost || !emailPort || !emailUser || !emailPassword) {
+        this.logger.error('❌ Email configuration is missing. Please check your environment variables.');
+        throw new Error('Email configuration is incomplete');
+      }
+
+      this.transporter = nodemailer.createTransport({
+        host: emailHost,
+        port: parseInt(emailPort, 10),
+        secure: emailPort === '465',
+        auth: {
+          user: emailUser,
+          pass: emailPassword,
         },
-        {
-          attempts: 5,
-          backoff: {
-            type: 'exponential',
-            delay: 2000,
-          },
-          removeOnComplete: true,
-          removeOnFail: false,
-        },
-      );
+      });
+
+      this.logger.log('✅ Mail transporter initialized successfully');
     } catch (error) {
-      console.error('❌ Failed to enqueue mail job:', error);
-      throw new InternalServerErrorException('Failed to enqueue email job');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`❌ Failed to initialize mail transporter: ${errorMessage}`, errorStack);
+      throw error;
     }
+  }
+
+  async sendVerificationOtp(email: string, otp: string) {
+    await this.sendMail('verification-otp', email, otp);
+  }
+
+  async sendForgotPasswordOtp(email: string, otp: string) {
+    await this.sendMail('forgot-password-otp', email, otp);
+  }
+
+  async sendChangeEmailOtp(email: string, otp: string) {
+    await this.sendMail('change-email-otp', email, otp);
+  }
+
+  private async sendMail(type: MailJobType, email: string, otp: string) {
+    try {
+      this.logger.log(`📧 Sending mail: type=${type}, email=${email}`);
+
+      if (!this.transporter) {
+        throw new Error('Mail transporter is not initialized');
+      }
+
+      const mailOptions = this.buildMailOptions(type, email, otp);
+      const info = await this.transporter.sendMail(mailOptions);
+
+      this.logger.log(`✅ Mail sent successfully to ${email}. MessageId: ${info.messageId}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`❌ Failed to send mail to ${email}: ${errorMessage}`, errorStack);
+      // Don't throw error to avoid blocking the request
+      // Mail failures should be logged but not interrupt the user flow
+    }
+  }
+
+  private buildMailOptions(type: MailJobType, email: string, otp: string) {
+    const from = `"Pickle" <${this.configService.get('EMAIL_USER')}>`;
+
+    if (type === 'change-email-otp') {
+      return {
+        from,
+        to: email,
+        subject: 'Email Change Verification',
+        html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Hello</h2>
+          <p>We received a request to change your email address to this address. Please use the following OTP to verify your new email:</p>
+          <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; letter-spacing: 5px; font-weight: bold;">
+            ${otp}
+          </div>
+          <p>This OTP will expire in 5 minutes.</p>
+          <p>If you didn't request this email change, please ignore this email and contact support.</p>
+          <p>Best regards,<br>Pickle Team</p>
+        </div>
+      `,
+      };
+    }
+
+    if (type === 'forgot-password-otp') {
+      return {
+        from,
+        to: email,
+        subject: 'Password Reset Mail',
+        html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Hello</h2>
+          <p>We received a request to reset your password. Please use the following OTP to proceed:</p>
+          <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; letter-spacing: 5px; font-weight: bold;">
+            ${otp}
+          </div>
+          <p>This OTP will expire in 5 minutes.</p>
+          <p>If you didn't request a password reset, please ignore this email.</p>
+          <p>Best regards,<br>Pickle Team</p>
+        </div>
+      `,
+      };
+    }
+
+    // verification-otp
+    return {
+      from,
+      to: email,
+      subject: 'Email Verification Required',
+      html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Hello</h2>
+        <p>Thank you for registering with Pickle. Please use the following OTP to verify your email address:</p>
+        <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; letter-spacing: 5px; font-weight: bold;">
+          ${otp}
+        </div>
+        <p>This OTP will expire in 5 minutes.</p>
+        <p>If you didn't register for Pickle, please ignore this email.</p>
+        <p>Best regards,<br>Pickle Team</p>
+      </div>
+    `,
+    };
   }
 }
 

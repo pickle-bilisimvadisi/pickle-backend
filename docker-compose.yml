@@ -13,17 +13,7 @@ services:
     volumes:
       - ./.env:/vault/.env:ro
       - vault_tokens:/vault/tokens
-
-  redis:
-    build: 
-      context: ./redis
-    ports:
-      - "6379:6379"
-    networks:
-      - app-network
-    depends_on:
-      - vault
-
+  
   database:
     build:
       context: ./postgres
@@ -55,13 +45,10 @@ services:
     depends_on:
       vault:
         condition: service_started
-      redis:
-        condition: service_started
       database:
         condition: service_healthy
     environment:
       VAULT_ADDR: http://vault:8200
-      REDIS_HOST: redis
     volumes:
       - vault_tokens:/vault/tokens:ro
     restart: on-failure

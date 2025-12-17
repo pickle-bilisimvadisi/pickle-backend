@@ -5,9 +5,8 @@ import { AppService } from './app.service';
 import { UserModule } from './user/user.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { BullModule } from '@nestjs/bull';
 import { MailModule } from './mail/mail.module';
 import { FileuploadModule } from './fileupload/fileupload.module';
 
@@ -15,17 +14,6 @@ import { FileuploadModule } from './fileupload/fileupload.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-    }),
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        redis: {
-          host: configService.get('REDIS_HOST') || 'localhost',
-          port: configService.get('REDIS_PORT') || 6379,
-          password: configService.get('REDIS_PASSWORD') || undefined,
-        },
-      }),
-      inject: [ConfigService],
     }),
     ThrottlerModule.forRoot([{
       ttl: 60,

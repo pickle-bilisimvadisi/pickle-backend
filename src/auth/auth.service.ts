@@ -45,12 +45,12 @@ export class AuthService {
     const user = await this.userService.findByEmail(email);
     
     if (!user) {
-        throw new UnauthorizedException('No user found with this email');
+        throw new BadRequestException('No user found with this email');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-        throw new UnauthorizedException('Invalid email or password');
+        throw new BadRequestException('Invalid email or password');
     }
 
     const { password: _, ...result } = user;
@@ -158,7 +158,9 @@ export class AuthService {
   }
 
   private async sendEmailChangeVerificationOtp(email: string, otp: string) {
-    await this.mailService.enqueueChangeEmailOtp(email, otp);
+    this.mailService.sendChangeEmailOtp(email, otp).catch(err => {
+      console.error('Failed to enqueue change email OTP:', err);
+    });
   }
 
   async forgotResetPassword(email: string, newPassword: string) {
@@ -403,7 +405,9 @@ export class AuthService {
       },
     });
     
-    await this.mailService.enqueueForgotPasswordOtp(email, otp);
+    this.mailService.sendForgotPasswordOtp(email, otp).catch(err => {
+      console.error('Failed to enqueue forgot password OTP:', err);
+    });
   }
 
   private async generateAndSendVerificationOtp(email: string, pendingUserData?: any, userId?: string) {
@@ -437,7 +441,9 @@ export class AuthService {
       });
     }
     
-    await this.mailService.enqueueVerificationOtp(email, otp);
+    this.mailService.sendVerificationOtp(email, otp).catch(err => {
+      console.error('Failed to enqueue verification OTP:', err);
+    });
   }
 
   async login(user: any) {

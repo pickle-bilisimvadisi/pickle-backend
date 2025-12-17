@@ -17,16 +17,8 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() body: { email: string; password: string }) {
-    try {
-        const user = await this.authService.validateUser(body.email, body.password);
-        return this.authService.login(user);
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw new BadRequestException(error.message);
-      } else {
-        throw new UnauthorizedException(error.message);
-      }
-    }
+      const user = await this.authService.validateUser(body.email, body.password);
+      return this.authService.login(user);
   }
 
   @Post('verify-email')
